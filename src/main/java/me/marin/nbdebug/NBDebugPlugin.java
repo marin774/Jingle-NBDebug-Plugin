@@ -7,6 +7,7 @@ import xyz.duncanruns.jingle.Jingle;
 import xyz.duncanruns.jingle.JingleAppLaunch;
 import xyz.duncanruns.jingle.gui.JingleGUI;
 import xyz.duncanruns.jingle.gui.UploadedLogPane;
+import xyz.duncanruns.jingle.plugin.PluginEvents;
 import xyz.duncanruns.jingle.plugin.PluginManager;
 
 import javax.swing.*;
@@ -15,10 +16,12 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NBDebugPlugin {
 
     private static JButton uploadButton;
+    private static final AtomicBoolean uploading = new AtomicBoolean(false);
 
     public static void main(String[] args) throws IOException {
         JingleAppLaunch.launchWithDevPlugin(args, PluginManager.JinglePluginData.fromString(
@@ -27,9 +30,12 @@ public class NBDebugPlugin {
     }
 
     public static void initialize() {
+        PluginEvents.MAIN_INSTANCE_CHANGED.register(NBDebugPlugin::updateButtonState);
+
         uploadButton = new JButton("Upload Ninjabrain Bot Settings");
         uploadButton.addActionListener((a) -> {
-            uploadButton.setEnabled(false);
+            uploading.set(true);
+            updateButtonState();
             new Thread(() -> {
                 try {
                     JsonObject response = Uploader.uploadSettings();
@@ -71,10 +77,16 @@ public class NBDebugPlugin {
                     JOptionPane.showMessageDialog(null, "Error while uploading settings.", "NBDebug: Upload Settings Failed", JOptionPane.ERROR_MESSAGE);
                 }
 
-                uploadButton.setEnabled(true);
+                uploading.set(false);
+                updateButtonState();
             }, "log-uploader").start();
         });
 
+        updateButtonState();
         JingleGUI.get().registerQuickActionButton(0, () -> uploadButton);
+    }
+
+    private static void updateButtonState() {
+        uploadButton.setEnabled(!uploading.get() && Jingle.getMainInstance().isPresent());
     }
 }
